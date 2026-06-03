@@ -107,7 +107,8 @@ window.Pages['/stock-out-records'] = {
           total: (item.quantity || 0) * (item.price || 0),
           type: order.type,
           time: UI.formatDateTime(order.createdAt),
-          warehouseName: wh ? wh.name : ''
+          warehouseName: wh ? wh.name : '',
+          images: order.images || []
         });
       });
     });
@@ -128,6 +129,13 @@ window.Pages['/stock-out-records'] = {
                 <div class="record-unit" style="font-size:11px;color:var(--text-light);">
                   ${r.unit ? `单位: ${r.unit} | ` : ''}时间:${r.time}
                 </div>
+                ${r.images && r.images.length > 0 ? `
+                  <div class="record-item-images" style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+                    ${r.images.map(img => `
+                      <img src="${img}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid var(--border); cursor:pointer;" onclick="UI.previewImage('${img}', event)">
+                    `).join('')}
+                  </div>
+                ` : ''}
               </div>
             </div>
             <span class="record-tag" style="background:var(--danger-bg);color:var(--danger);">${r.type}</span>

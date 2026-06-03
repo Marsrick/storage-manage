@@ -209,7 +209,7 @@ window.UI = (() => {
         <div class="select-list">
           ${options.map(opt => `
             <div class="select-list-item ${opt.value === currentValue ? 'selected' : ''}" data-value="${opt.value}">
-              <span>${opt.label}</span>
+              <div class="select-list-item-content">${opt.label}</div>
               ${opt.value === currentValue ? '<span class="check">✓</span>' : ''}
             </div>
           `).join('')}
@@ -228,6 +228,156 @@ window.UI = (() => {
           resolve(el.dataset.value);
         };
       });
+    });
+  }
+
+  // ========== Multi Select Modal ==========
+  function multiSelectModal(title, options, currentValues = []) {
+    return new Promise(resolve => {
+      let selectedSet = new Set(currentValues);
+      let selectedCategory = '';
+      let searchKeyword = '';
+
+      const hasFilter = options.some(opt => 'categoryId' in opt || 'searchText' in opt);
+
+      // Extract unique categories from options
+      const catMap = new Map();
+      options.forEach(opt => {
+        if (opt.categoryId) {
+          catMap.set(opt.categoryId, opt.categoryName || '其它');
+        }
+      });
+      const uniqueCategories = Array.from(catMap.entries()).map(([id, name]) => ({ id, name }));
+      const allCategories = [{ id: '', name: '全部' }, ...uniqueCategories];
+
+      const renderList = () => {
+        const filteredOptions = options.filter(opt => {
+          const matchesCategory = !selectedCategory || opt.categoryId === selectedCategory;
+          const queryTokens = searchKeyword.split(/\s+/).filter(Boolean);
+          const matchesSearch = queryTokens.every(token => 
+            (opt.searchText && opt.searchText.includes(token)) || 
+            (opt.label && opt.label.toLowerCase().includes(token))
+          );
+          return matchesCategory && matchesSearch;
+        });
+
+        if (filteredOptions.length === 0) {
+          return `<div style="text-align:center; padding: 32px 16px; color:var(--text-light); font-size:13px;">暂无匹配的商品</div>`;
+        }
+
+        return filteredOptions.map(opt => {
+          const isSelected = selectedSet.has(opt.value);
+          return `
+            <div class="select-list-item ${isSelected ? 'selected' : ''}" data-value="${opt.value}" style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+              <div class="checkbox-box" style="width:20px; height:20px; border:2.5px solid var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:${isSelected ? 'var(--primary)' : 'transparent'}; border-color:${isSelected ? 'var(--primary)' : 'var(--border)'}; color:white; font-size:12px; font-weight:bold; transition: all 0.2s;">
+                ${isSelected ? '✓' : ''}
+              </div>
+              <div class="select-list-item-content" style="flex:1;">${opt.label}</div>
+            </div>
+          `;
+        }).join('');
+      };
+
+      let bodyHtml = '';
+      if (hasFilter) {
+        bodyHtml = `
+          <div class="modal-filter-wrap" style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="filter-input-wrap" style="position: relative;">
+              <span class="filter-search-icon" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-light); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;">
+                ${ICONS.search}
+              </span>
+              <input type="text" class="filter-search" id="modal-search-input" placeholder="输入名称、规格、厂家进行搜索..." style="width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--bg); color: var(--text);">
+            </div>
+            ${uniqueCategories.length > 0 ? `
+              <div class="category-tabs" id="modal-category-tabs" style="padding: 4px 0; border-bottom: 1px solid var(--divider); display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 4px;">
+                ${allCategories.map(cat => `
+                  <button class="category-tab ${selectedCategory === cat.id ? 'active' : ''}" data-cat-id="${cat.id}" style="padding: 6px 12px; font-size: 12px; border-radius: 20px; border: none; background: ${selectedCategory === cat.id ? 'var(--primary-bg)' : 'transparent'}; color: ${selectedCategory === cat.id ? 'var(--primary)' : 'var(--text-secondary)'}; font-weight: ${selectedCategory === cat.id ? '600' : 'normal'}; white-space: nowrap; transition: all 0.2s;">
+                    ${cat.name}
+                  </button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      bodyHtml += `
+        <div class="select-list" id="multi-select-list">
+          ${renderList()}
+        </div>
+      `;
+
+      const overlay = showModal(title, bodyHtml, {
+        showCancel: true,
+        cancelText: '取消',
+        confirmText: '确定',
+        onConfirm: () => {
+          resolve(Array.from(selectedSet));
+        },
+        onCancel: () => {
+          resolve(null);
+        }
+      });
+
+      const bindListEvents = () => {
+        const listEl = overlay.querySelector('#multi-select-list');
+        if (!listEl) return;
+        listEl.querySelectorAll('.select-list-item').forEach(el => {
+          el.onclick = () => {
+            const val = el.dataset.value;
+            if (selectedSet.has(val)) {
+              selectedSet.delete(val);
+            } else {
+              selectedSet.add(val);
+            }
+            listEl.innerHTML = renderList();
+            bindListEvents();
+          };
+        });
+      };
+
+      const bindCategoryEvents = () => {
+        const tabsEl = overlay.querySelector('#modal-category-tabs');
+        if (!tabsEl) return;
+        tabsEl.querySelectorAll('.category-tab').forEach(btn => {
+          btn.onclick = () => {
+            selectedCategory = btn.dataset.catId;
+            // Update active states
+            tabsEl.querySelectorAll('.category-tab').forEach(b => {
+              const active = b.dataset.catId === selectedCategory;
+              b.classList.toggle('active', active);
+              b.style.background = active ? 'var(--primary-bg)' : 'transparent';
+              b.style.color = active ? 'var(--primary)' : 'var(--text-secondary)';
+              b.style.fontWeight = active ? '600' : 'normal';
+            });
+            // Update list
+            const listEl = overlay.querySelector('#multi-select-list');
+            if (listEl) {
+              listEl.innerHTML = renderList();
+              bindListEvents();
+            }
+          };
+        });
+      };
+
+      const bindSearchEvents = () => {
+        const searchInput = overlay.querySelector('#modal-search-input');
+        if (!searchInput) return;
+        searchInput.oninput = (e) => {
+          searchKeyword = e.target.value.trim().toLowerCase();
+          const listEl = overlay.querySelector('#multi-select-list');
+          if (listEl) {
+            listEl.innerHTML = renderList();
+            bindListEvents();
+          }
+        };
+      };
+
+      bindListEvents();
+      if (hasFilter) {
+        bindCategoryEvents();
+        bindSearchEvents();
+      }
     });
   }
 
@@ -311,6 +461,27 @@ window.UI = (() => {
     return ICONS[name] || '';
   }
 
+  // ========== Image Preview Modal ==========
+  function previewImage(base64Url, event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    const viewer = document.createElement('div');
+    viewer.style.position = 'fixed';
+    viewer.style.inset = '0';
+    viewer.style.background = 'rgba(0,0,0,0.9)';
+    viewer.style.zIndex = '3000';
+    viewer.style.display = 'flex';
+    viewer.style.alignItems = 'center';
+    viewer.style.justifyContent = 'center';
+    viewer.innerHTML = `
+      <img src="${base64Url}" style="max-width:100vw; max-height:100vh; object-fit:contain; animation: zoomIn 0.25s ease-out;">
+      <button style="position:absolute; top:20px; right:20px; color:white; font-size:30px; border:none; background:none; cursor:pointer;">&times;</button>
+    `;
+    viewer.onclick = () => { viewer.remove(); };
+    document.body.appendChild(viewer);
+  }
+
   // ========== Public API ==========
   return {
     ICONS,
@@ -322,12 +493,14 @@ window.UI = (() => {
     confirm,
     actionSheet,
     selectModal,
+    multiSelectModal,
     inputModal,
     empty,
     formatDate,
     formatDateTime,
     today,
     daysAgo,
-    exportCSV
+    exportCSV,
+    previewImage
   };
 })();
