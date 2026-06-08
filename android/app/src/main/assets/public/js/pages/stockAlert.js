@@ -97,7 +97,7 @@ window.Pages['/stock-alert'] = {
               <div class="item-icon" style="background:var(--warning-bg);color:var(--warning);">⚠️</div>
               <div class="item-info">
                 <div class="item-name">${item.productName}</div>
-                <div class="item-category">分类: ${item.categoryName || '无'} | 仓库: ${item.warehouseName}</div>
+                <div class="item-category">分类: ${item.categoryName || '无'} | 规格: ${item.specName || '-'} | 仓库: ${item.warehouseName}</div>
               </div>
             </div>
             <div class="item-data">

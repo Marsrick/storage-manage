@@ -482,6 +482,153 @@ window.UI = (() => {
     document.body.appendChild(viewer);
   }
 
+  // ========== Date Picker Modal (iOS Style Wheel) ==========
+  function datePickerModal(title, defaultValue = '') {
+    return new Promise(resolve => {
+      let defaultDate = new Date();
+      if (defaultValue) {
+        const parts = defaultValue.split('-');
+        if (parts.length === 3) {
+          defaultDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        }
+      }
+      
+      const initYear = defaultDate.getFullYear();
+      const initMonth = defaultDate.getMonth() + 1;
+      const initDay = defaultDate.getDate();
+
+      const overlay = document.getElementById('modal-overlay');
+      overlay.className = 'modal-overlay';
+      overlay.classList.remove('hidden');
+
+      const currentYear = new Date().getFullYear();
+      const years = [];
+      for (let y = currentYear - 5; y <= currentYear + 20; y++) {
+        years.push(y);
+      }
+      const months = Array.from({ length: 12 }, (_, i) => i + 1);
+      
+      const getDaysInMonth = (y, m) => new Date(y, m, 0).getDate();
+
+      overlay.innerHTML = `
+        <div class="date-picker-modal">
+          <div style="font-weight: 600; text-align: center; font-size: 16px; color: var(--text);">${title || '选择日期'}</div>
+          <div class="date-picker-wheels">
+            <div class="date-picker-mask"></div>
+            <div class="date-picker-wheel" id="dp-wheel-year">
+              ${years.map(y => `<div class="date-picker-item" data-val="${y}">${y}年</div>`).join('')}
+            </div>
+            <div class="date-picker-wheel" id="dp-wheel-month">
+              ${months.map(m => `<div class="date-picker-item" data-val="${m}">${m}月</div>`).join('')}
+            </div>
+            <div class="date-picker-wheel" id="dp-wheel-day">
+            </div>
+          </div>
+          <div class="date-picker-btns">
+            <button class="date-picker-btn-cancel" id="dp-btn-cancel">取消</button>
+            <button class="date-picker-btn-confirm" id="dp-btn-confirm">确定</button>
+          </div>
+        </div>
+      `;
+
+      const wheelYear = overlay.querySelector('#dp-wheel-year');
+      const wheelMonth = overlay.querySelector('#dp-wheel-month');
+      const wheelDay = overlay.querySelector('#dp-wheel-day');
+
+      const updateDays = (selectedYear, selectedMonth, selectedDay) => {
+        const daysCount = getDaysInMonth(selectedYear, selectedMonth);
+        let html = '';
+        for (let d = 1; d <= daysCount; d++) {
+          html += `<div class="date-picker-item" data-val="${d}">${d}日</div>`;
+        }
+        wheelDay.innerHTML = html;
+        
+        const dVal = Math.min(selectedDay, daysCount);
+        const dayIdx = dVal - 1;
+        wheelDay.scrollTop = dayIdx * 40;
+        updateSelectedClass(wheelDay);
+      };
+
+      const updateSelectedClass = (wheel) => {
+        const idx = Math.round(wheel.scrollTop / 40);
+        const items = wheel.querySelectorAll('.date-picker-item');
+        items.forEach((item, i) => {
+          if (i === idx) {
+            item.classList.add('selected');
+          } else {
+            item.classList.remove('selected');
+          }
+        });
+      };
+
+      const yearIdx = years.indexOf(initYear);
+      const monthIdx = months.indexOf(initMonth);
+      
+      setTimeout(() => {
+        wheelYear.scrollTop = (yearIdx >= 0 ? yearIdx : 0) * 40;
+        wheelMonth.scrollTop = (monthIdx >= 0 ? monthIdx : 0) * 40;
+        updateDays(initYear, initMonth, initDay);
+        
+        updateSelectedClass(wheelYear);
+        updateSelectedClass(wheelMonth);
+      }, 50);
+
+      let scrollTimeout;
+      const onWheelScroll = (wheel, isYearOrMonth) => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          updateSelectedClass(wheel);
+          if (isYearOrMonth) {
+            const yIdx = Math.round(wheelYear.scrollTop / 40);
+            const mIdx = Math.round(wheelMonth.scrollTop / 40);
+            const y = years[yIdx] || currentYear;
+            const m = months[mIdx] || 1;
+            
+            const dIdx = Math.round(wheelDay.scrollTop / 40);
+            const d = dIdx + 1;
+            updateDays(y, m, d);
+          }
+        }, 100);
+      };
+
+      wheelYear.onscroll = () => onWheelScroll(wheelYear, true);
+      wheelMonth.onscroll = () => onWheelScroll(wheelMonth, true);
+      wheelDay.onscroll = () => onWheelScroll(wheelDay, false);
+
+      [wheelYear, wheelMonth, wheelDay].forEach((wheel) => {
+        wheel.onclick = (e) => {
+          const item = e.target.closest('.date-picker-item');
+          if (item) {
+            const idx = Array.from(wheel.children).indexOf(item);
+            wheel.scrollTo({ top: idx * 40, behavior: 'smooth' });
+          }
+        };
+      });
+
+      overlay.querySelector('#dp-btn-cancel').onclick = () => {
+        overlay.classList.add('hidden');
+        resolve(null);
+      };
+
+      overlay.querySelector('#dp-btn-confirm').onclick = () => {
+        const yIdx = Math.round(wheelYear.scrollTop / 40);
+        const mIdx = Math.round(wheelMonth.scrollTop / 40);
+        const dIdx = Math.round(wheelDay.scrollTop / 40);
+
+        const y = years[yIdx] || currentYear;
+        const m = months[mIdx] || 1;
+        const d = dIdx + 1;
+        const daysCount = getDaysInMonth(y, m);
+        const finalDay = Math.min(d, daysCount);
+
+        const pad = n => String(n).padStart(2, '0');
+        const dateStr = `${y}-${pad(m)}-${pad(finalDay)}`;
+        overlay.classList.add('hidden');
+        resolve(dateStr);
+      };
+    });
+  }
+
   // ========== Public API ==========
   return {
     ICONS,
@@ -501,6 +648,7 @@ window.UI = (() => {
     today,
     daysAgo,
     exportCSV,
-    previewImage
+    previewImage,
+    datePickerModal
   };
 })();

@@ -40,8 +40,9 @@ window.Pages['/stock-out'] = {
           <div class="card" style="margin-top:12px;">
             <div class="form-group">
               <span class="form-label">日期 <span class="required">*</span></span>
-              <div class="form-value">
-                <input class="form-input" id="f-date" type="date" value="${this._form.date}">
+              <div class="form-value" id="f-date-btn" style="cursor:pointer;">
+                <span class="form-select-value" id="f-date-text">${this._form.date}</span>
+                <span class="form-arrow">›</span>
               </div>
             </div>
             <div class="form-group">
@@ -104,6 +105,15 @@ window.Pages['/stock-out'] = {
   },
 
   afterRender() {
+    // 日期选择
+    document.getElementById('f-date-btn').onclick = async () => {
+      const val = await UI.datePickerModal('选择日期', this._form.date);
+      if (val) {
+        this._form.date = val;
+        document.getElementById('f-date-text').textContent = val;
+      }
+    };
+
     document.getElementById('f-warehouse-btn').onclick = async () => {
       const warehouses = Store.warehouses.getAll();
       const options = warehouses.map(w => ({ label: w.name, value: w.id }));
@@ -188,43 +198,60 @@ window.Pages['/stock-out'] = {
     const invList = Store.getInventory({ warehouseId, showZero: true });
     const stockMap = {};
     invList.forEach(item => {
-      stockMap[item.productId] = item.quantity;
+      stockMap[`${item.productId}__${item.specId}`] = item.quantity;
     });
 
-    const options = products.map(p => {
-      const stock = stockMap[p.id] || 0;
-      const unit = p.unit || '';
-      return {
-        label: `
-          <div class="product-select-item">
-            <div class="product-select-name">${p.name}</div>
-            <div class="product-select-meta">
-              <span class="product-select-cat">${catMap[p.categoryId] || '无分类'}</span>
-              <span class="product-select-stock">库存: <strong class="stock-highlight">${stock}</strong> ${unit}</span>
+    const options = [];
+    products.forEach(p => {
+      const specs = p.specs || [];
+      specs.forEach(s => {
+        const key = `${p.id}__${s.id}`;
+        const stock = stockMap[key] || 0;
+        const unit = p.unit || '';
+        const details = [];
+        if (s.name) details.push(`规格: ${s.name}`);
+        if (s.manufacturer) details.push(`厂家: ${s.manufacturer}`);
+        const detailsText = details.join(' | ') || '无规格/厂家';
+        options.push({
+          label: `
+            <div class="product-select-item">
+              <div class="product-select-name">${p.name}</div>
+              <div class="product-select-meta">
+                <span class="product-select-cat">${catMap[p.categoryId] || '无分类'}</span>
+                <span class="product-select-detail" style="margin-right:12px;">${detailsText}</span>
+                <span class="product-select-stock">库存: <strong class="stock-highlight">${stock}</strong> ${unit}</span>
+              </div>
             </div>
-          </div>
-        `,
-        value: p.id,
-        categoryId: p.categoryId || '',
-        categoryName: catMap[p.categoryId] || '无分类',
-        searchText: `${p.name} ${p.spec || ''} ${p.manufacturer || ''} ${p.barcode || ''} ${p.itemNo || ''} ${catMap[p.categoryId] || ''}`.toLowerCase()
-      };
+          `,
+          value: key,
+          categoryId: p.categoryId || '',
+          categoryName: catMap[p.categoryId] || '无分类',
+          searchText: `${p.name} ${s.name || ''} ${s.manufacturer || ''} ${s.barcode || ''} ${s.itemNo || ''} ${catMap[p.categoryId] || ''}`.toLowerCase()
+        });
+      });
     });
 
-    const currentSelectedIds = this._form.items.map(i => i.productId);
+    const currentSelectedIds = this._form.items.map(i => `${i.productId}__${i.specId}`);
 
-    const vals = await UI.multiSelectModal('选择商品', options, currentSelectedIds);
+    const vals = await UI.multiSelectModal('选择商品规格', options, currentSelectedIds);
     if (vals) {
       const oldItemsMap = {};
       this._form.items.forEach(item => {
-        oldItemsMap[item.productId] = item;
+        oldItemsMap[`${item.productId}__${item.specId}`] = item;
       });
 
       this._form.items = vals.map(val => {
         if (oldItemsMap[val]) {
           return oldItemsMap[val];
         } else {
-          return { productId: val, quantity: 1, price: 0 };
+          const [productId, specId] = val.split('__');
+          const p = Store.products.getById(productId);
+          let defaultPrice = 0;
+          if (p && p.specs) {
+            const s = p.specs.find(sp => sp.id === specId);
+            if (s) defaultPrice = s.outPrice || 0;
+          }
+          return { productId, specId, quantity: 1, price: defaultPrice };
         }
       });
 
@@ -240,17 +267,29 @@ window.Pages['/stock-out'] = {
     const invList = Store.getInventory({ warehouseId, showZero: true });
     const stockMap = {};
     invList.forEach(item => {
-      stockMap[item.productId] = item.quantity;
+      stockMap[`${item.productId}__${item.specId}`] = item.quantity;
     });
 
     container.innerHTML = this._form.items.map((item, idx) => {
       const p = Store.products.getById(item.productId);
       const name = p ? p.name : '未知商品';
       const unit = p ? (p.unit || '') : '';
-      const stock = p ? (stockMap[item.productId] || 0) : 0;
+      let specName = '-';
+      let manufacturer = '-';
+      if (p && p.specs) {
+        const s = p.specs.find(sp => sp.id === item.specId);
+        if (s) {
+          specName = s.name || '-';
+          manufacturer = s.manufacturer || '-';
+        }
+      }
+      const stock = stockMap[`${item.productId}__${item.specId}`] || 0;
       return `
         <div class="product-item-card">
           <div class="product-name">${name}</div>
+          <div class="product-spec-manufacturer" style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">
+            规格型号: ${specName} &nbsp;&nbsp;|&nbsp;&nbsp; 厂家: ${manufacturer}
+          </div>
           <div class="product-stock" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
             剩余库存量: <span class="stock-badge-selected">${stock} ${unit}</span>
           </div>
@@ -275,7 +314,7 @@ window.Pages['/stock-out'] = {
   },
 
   onSubmit() {
-    const date = document.getElementById('f-date').value;
+    const date = document.getElementById('f-date-text').textContent;
     if (!date) {
       UI.toast('请选择日期', 'error');
       return;
@@ -300,6 +339,7 @@ window.Pages['/stock-out'] = {
       images: this._form.images || [],
       items: this._form.items.map(i => ({
         productId: i.productId,
+        specId: i.specId,
         quantity: parseInt(i.quantity) || 0,
         price: parseFloat(i.price) || 0
       })),

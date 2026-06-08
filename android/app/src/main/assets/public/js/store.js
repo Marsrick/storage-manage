@@ -39,6 +39,26 @@ window.Store = (() => {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
+  function _normalizeProduct(p) {
+    if (!p) return null;
+    if (!p.specs || p.specs.length === 0) {
+      p.specs = [{
+        id: p.id + '_default',
+        name: p.spec || '默认规格',
+        image: p.image || '',
+        barcode: p.barcode || '',
+        manufacturer: p.manufacturer || '',
+        itemNo: p.itemNo || '',
+        inPrice: 0,
+        outPrice: 0,
+        minStock: Number(p.minStock) || 0,
+        expiryDate: p.expiryDate || '',
+        remark: ''
+      }];
+    }
+    return p;
+  }
+
   // ========== Generic CRUD ==========
   function _getAll(key) { return _get(key); }
 
@@ -107,21 +127,27 @@ window.Store = (() => {
 
   // ========== Products ==========
   const products = {
-    getAll: () => _getAll(KEYS.PRODUCTS),
-    getById: (id) => _getById(KEYS.PRODUCTS, id),
+    getAll: () => _getAll(KEYS.PRODUCTS).map(_normalizeProduct),
+    getById: (id) => _normalizeProduct(_getById(KEYS.PRODUCTS, id)),
     add: (data) => _add(KEYS.PRODUCTS, data),
     update: (id, data) => _update(KEYS.PRODUCTS, id, data),
     remove: (id) => _remove(KEYS.PRODUCTS, id),
     search(keyword) {
       const kw = (keyword || '').toLowerCase();
-      return _getAll(KEYS.PRODUCTS).filter(p =>
+      return _getAll(KEYS.PRODUCTS).map(_normalizeProduct).filter(p =>
         p.name.toLowerCase().includes(kw) ||
-        (p.barcode && p.barcode.includes(kw))
+        p.specs.some(s => 
+          (s.name && s.name.toLowerCase().includes(kw)) ||
+          (s.barcode && s.barcode.includes(kw)) ||
+          (s.manufacturer && s.manufacturer.toLowerCase().includes(kw)) ||
+          (s.itemNo && s.itemNo.toLowerCase().includes(kw))
+        )
       );
     },
     getByCategory(categoryId) {
-      if (!categoryId) return _getAll(KEYS.PRODUCTS);
-      return _getAll(KEYS.PRODUCTS).filter(p => p.categoryId === categoryId);
+      const list = _getAll(KEYS.PRODUCTS).map(_normalizeProduct);
+      if (!categoryId) return list;
+      return list.filter(p => p.categoryId === categoryId);
     }
   };
 
@@ -190,13 +216,27 @@ window.Store = (() => {
   function _calcInventory() {
     const inv = {};
 
+    const getInvKey = (productId, specId, warehouseId) => {
+      return `${productId}__${specId || 'default'}__${warehouseId}`;
+    };
+
     // 累加入库
     _getAll(KEYS.STOCK_IN).forEach(order => {
       (order.items || []).forEach(item => {
-        const key = `${item.productId}__${order.warehouseId}`;
+        let specId = item.specId;
+        if (!specId) {
+          const prod = products.getById(item.productId);
+          if (prod && prod.specs && prod.specs.length > 0) {
+            specId = prod.specs[0].id;
+          } else {
+            specId = item.productId + '_default';
+          }
+        }
+        const key = getInvKey(item.productId, specId, order.warehouseId);
         if (!inv[key]) {
           inv[key] = {
             productId: item.productId,
+            specId: specId,
             warehouseId: order.warehouseId,
             quantity: 0,
             totalCost: 0
@@ -210,10 +250,20 @@ window.Store = (() => {
     // 扣减出库
     _getAll(KEYS.STOCK_OUT).forEach(order => {
       (order.items || []).forEach(item => {
-        const key = `${item.productId}__${order.warehouseId}`;
+        let specId = item.specId;
+        if (!specId) {
+          const prod = products.getById(item.productId);
+          if (prod && prod.specs && prod.specs.length > 0) {
+            specId = prod.specs[0].id;
+          } else {
+            specId = item.productId + '_default';
+          }
+        }
+        const key = getInvKey(item.productId, specId, order.warehouseId);
         if (!inv[key]) {
           inv[key] = {
             productId: item.productId,
+            specId: specId,
             warehouseId: order.warehouseId,
             quantity: 0,
             totalCost: 0
@@ -238,32 +288,53 @@ window.Store = (() => {
       inv = inv.filter(i => pids.includes(i.productId));
     }
     if (filters.keyword) {
-      const pids = products.search(filters.keyword).map(p => p.id);
-      inv = inv.filter(i => pids.includes(i.productId));
+      const matchedSpecs = [];
+      _getAll(KEYS.PRODUCTS).map(_normalizeProduct).forEach(p => {
+        const matchesProduct = p.name.toLowerCase().includes(filters.keyword.toLowerCase()) ||
+          (p.manufacturer && p.manufacturer.toLowerCase().includes(filters.keyword.toLowerCase())) ||
+          (p.itemNo && p.itemNo.toLowerCase().includes(filters.keyword.toLowerCase()));
+        
+        p.specs.forEach(s => {
+          const matchesSpec = matchesProduct ||
+            (s.name && s.name.toLowerCase().includes(filters.keyword.toLowerCase())) ||
+            (s.barcode && s.barcode.includes(filters.keyword));
+          if (matchesSpec) {
+            matchedSpecs.push(`${p.id}__${s.id}`);
+          }
+        });
+      });
+      inv = inv.filter(i => matchedSpecs.includes(`${i.productId}__${i.specId}`));
     }
     if (!filters.showZero) {
       inv = inv.filter(i => i.quantity !== 0);
     }
 
-    // 丰富商品信息
+    // 丰富商品及规格信息
     return inv.map(i => {
       const product = products.getById(i.productId);
       const warehouse = warehouses.getById(i.warehouseId);
       const category = product ? categories.getById(product.categoryId) : null;
+      
+      let spec = null;
+      if (product && product.specs) {
+        spec = product.specs.find(s => s.id === i.specId) || product.specs[0];
+      }
+
       return {
         ...i,
         productName: product ? product.name : '未知商品',
         productUnit: product ? (product.unit || '') : '',
-        productBarcode: product ? (product.barcode || '') : '',
+        productBarcode: spec ? (spec.barcode || '') : '',
         categoryName: category ? category.name : '',
         warehouseName: warehouse ? warehouse.name : '',
         avgCost: i.quantity > 0 ? +(i.totalCost / i.quantity).toFixed(2) : 0,
         inventoryValue: +i.totalCost.toFixed(2),
-        minStock: product ? (Number(product.minStock) || 0) : 0,
-        expiryDate: product ? (product.expiryDate || '') : '',
-        expiryDays: product && product.expiryDate ? _daysUntil(product.expiryDate) : 0,
-        itemNo: product ? (product.itemNo || '') : '',
-        manufacturer: product ? (product.manufacturer || '') : ''
+        minStock: spec ? (Number(spec.minStock) || 0) : 0,
+        expiryDate: spec ? (spec.expiryDate || '') : '',
+        expiryDays: spec && spec.expiryDate ? _daysUntil(spec.expiryDate) : 0,
+        itemNo: spec ? (spec.itemNo || '') : '',
+        manufacturer: spec ? (spec.manufacturer || '') : '',
+        specName: spec ? (spec.name || '-') : '-'
       };
     });
   }
@@ -274,7 +345,13 @@ window.Store = (() => {
       .filter(i => i.productId === productId && i.quantity > 0)
       .map(i => {
         const wh = warehouses.getById(i.warehouseId);
-        return { warehouseName: wh ? wh.name : '未知', quantity: i.quantity };
+        const prod = products.getById(i.productId);
+        let specName = '';
+        if (prod && prod.specs) {
+          const spec = prod.specs.find(s => s.id === i.specId);
+          if (spec) specName = ` (${spec.name})`;
+        }
+        return { warehouseName: wh ? (wh.name + specName) : '未知', quantity: i.quantity };
       });
   }
 

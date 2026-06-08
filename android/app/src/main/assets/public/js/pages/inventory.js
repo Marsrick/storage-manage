@@ -111,20 +111,21 @@ window.Pages['/inventory'] = {
       return UI.empty('暂无库存数据');
     }
 
-    // 合并同一商品在所有仓库的数据
+    // 合并同一商品规格在所有仓库的数据
     const merged = {};
     items.forEach(i => {
-      if (!merged[i.productId]) {
-        merged[i.productId] = {
+      const key = `${i.productId}__${i.specId}`;
+      if (!merged[key]) {
+        merged[key] = {
           ...i,
           totalQuantity: 0,
           totalValue: 0,
           warehouses: []
         };
       }
-      merged[i.productId].totalQuantity += i.quantity;
-      merged[i.productId].totalValue += i.inventoryValue;
-      merged[i.productId].warehouses.push({ name: i.warehouseName, qty: i.quantity });
+      merged[key].totalQuantity += i.quantity;
+      merged[key].totalValue += i.inventoryValue;
+      merged[key].warehouses.push({ name: i.warehouseName, qty: i.quantity });
     });
 
     // 如果选了特定仓库就不合并
@@ -147,6 +148,7 @@ window.Pages['/inventory'] = {
                   <div class="item-name">${item.productName}</div>
                   <div class="item-category">
                     分类: ${item.categoryName || '无'}
+                    ${item.specName ? ` | 规格: ${item.specName}` : ''}
                     ${item.itemNo ? ` | 货号: ${item.itemNo}` : ''}
                     ${item.manufacturer ? ` | 厂家: ${item.manufacturer}` : ''}
                   </div>
@@ -174,6 +176,7 @@ window.Pages['/inventory'] = {
     const rows = items.map(i => [
       i.productName,
       i.categoryName,
+      i.specName || '',
       i.itemNo || '',
       i.manufacturer || '',
       i.productUnit,
@@ -187,7 +190,7 @@ window.Pages['/inventory'] = {
 
     UI.exportCSV(
       `库存报表_${UI.today()}.csv`,
-      ['商品名称', '分类', '货号', '厂家', '单位', '仓库', '库存数量', '成本均价', '库存额', '安全库存', '有效期截至'],
+      ['商品名称', '分类', '规格', '货号', '厂家', '单位', '仓库', '库存数量', '成本均价', '库存额', '安全库存', '有效期截至'],
       rows
     );
   }

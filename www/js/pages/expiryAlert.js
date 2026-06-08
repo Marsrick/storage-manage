@@ -119,7 +119,7 @@ window.Pages['/expiry-alert'] = {
               <div class="item-info">
                 <div class="item-name">${item.productName}</div>
                 <div class="item-category">
-                  分类: ${item.categoryName || '无'} | 仓库: ${item.warehouseName}
+                  分类: ${item.categoryName || '无'} | 规格: ${item.specName || '-'} | 仓库: ${item.warehouseName}
                   ${item.itemNo ? ` | 货号: ${item.itemNo}` : ''}
                   ${item.manufacturer ? ` | 厂家: ${item.manufacturer}` : ''}
                 </div>

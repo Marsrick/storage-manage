@@ -1621,3 +1621,166 @@ img { max-width: 100%; display: block; }
   to { transform: scale(1); opacity: 1; }
 }
 
+/* ===== iOS-Style Scroll Date Picker ===== */
+.date-picker-modal {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 500px;
+  background: var(--card);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+  z-index: 2000;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slideUpDatePicker 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  box-sizing: border-box;
+}
+@keyframes slideUpDatePicker {
+  from { transform: translate(-50%, 100%); }
+  to { transform: translate(-50%, 0); }
+}
+.date-picker-wheels {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+.date-picker-wheel {
+  flex: 1;
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 80px 0;
+  box-sizing: border-box;
+}
+.date-picker-wheel::-webkit-scrollbar {
+  display: none;
+}
+.date-picker-item {
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-light);
+  scroll-snap-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.date-picker-item.selected {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+.date-picker-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 80px;
+  height: 40px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  pointer-events: none;
+  background: rgba(46, 92, 184, 0.04);
+}
+.date-picker-btns {
+  display: flex;
+  gap: 16px;
+}
+.date-picker-btn-cancel {
+  flex: 1;
+  height: 44px;
+  border-radius: 22px;
+  border: none;
+  background: var(--divider);
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.date-picker-btn-cancel:active {
+  background: var(--border);
+}
+.date-picker-btn-confirm {
+  flex: 1;
+  height: 44px;
+  border-radius: 22px;
+  border: none;
+  background: var(--success);
+  color: #fff;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.date-picker-btn-confirm:active {
+  background: #059669;
+  transform: scale(0.98);
+}
+
+/* Multi-Specification Editing Styles */
+.spec-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--primary-bg);
+  color: var(--primary);
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+}
+.btn-delete-spec {
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.spec-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 12px 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.btn-add-spec-wrap {
+  padding: 0 16px 16px;
+}
+.btn-add-spec {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1.5px dashed var(--primary);
+  border-radius: var(--radius);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--primary-bg);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.btn-add-spec:active {
+  background: rgba(46, 92, 184, 0.15);
+}
+
+

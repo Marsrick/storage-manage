@@ -35,9 +35,9 @@ window.Pages['/stock-in-records'] = {
           <div class="filter-row">
             <span style="font-size:13px;color:var(--text-secondary);white-space:nowrap;">操作时间</span>
             <div class="filter-date-range">
-              <input type="date" class="filter-date" id="filter-start" value="${thirtyDaysAgo}">
+              <input type="text" class="filter-date" id="filter-start" value="${thirtyDaysAgo}" readonly style="cursor:pointer;">
               <span class="filter-date-sep">~</span>
-              <input type="date" class="filter-date" id="filter-end" value="${UI.today()}">
+              <input type="text" class="filter-date" id="filter-end" value="${UI.today()}" readonly style="cursor:pointer;">
             </div>
             <button class="btn-query" onclick="Pages['/stock-in-records'].doQuery()">查询</button>
           </div>
@@ -69,6 +69,22 @@ window.Pages['/stock-in-records'] = {
       }
     };
 
+    document.getElementById('filter-start').onclick = async (e) => {
+      const val = await UI.datePickerModal('选择开始日期', e.target.value);
+      if (val) {
+        e.target.value = val;
+        this.doQuery();
+      }
+    };
+
+    document.getElementById('filter-end').onclick = async (e) => {
+      const val = await UI.datePickerModal('选择结束日期', e.target.value);
+      if (val) {
+        e.target.value = val;
+        this.doQuery();
+      }
+    };
+
     document.getElementById('search-operator').addEventListener('input', (e) => {
       this._filters.operator = e.target.value.trim();
     });
@@ -92,17 +108,22 @@ window.Pages['/stock-in-records'] = {
       return UI.empty('暂无入库记录');
     }
 
-    // 展平：每个商品一条记录
     const records = [];
     orders.forEach(order => {
       const wh = Store.warehouses.getById(order.warehouseId);
       (order.items || []).forEach(item => {
         const product = Store.products.getById(item.productId);
         const category = product ? Store.categories.getById(product.categoryId) : null;
+        let specName = '';
+        if (product && product.specs) {
+          const spec = product.specs.find(sp => sp.id === item.specId);
+          if (spec) specName = spec.name;
+        }
         records.push({
           orderId: order.id,
           productName: product ? product.name : '未知商品',
           categoryName: category ? category.name : '',
+          specName: specName,
           unit: product ? (product.unit || '') : '',
           quantity: item.quantity,
           price: item.price,
@@ -124,7 +145,7 @@ window.Pages['/stock-in-records'] = {
               <div class="record-item-icon">📥</div>
               <div class="record-item-info">
                 <div class="product-name">${r.productName}</div>
-                <div class="product-category">分类: ${r.categoryName || '无'}</div>
+                <div class="product-category">分类: ${r.categoryName || '无'}${r.specName ? ` | 规格: ${r.specName}` : ''}</div>
                 <div class="record-meta">
                   <span class="quantity">数量 ${r.quantity}</span>
                   <span class="price">¥ ${r.total.toFixed(2)}</span>
@@ -157,6 +178,11 @@ window.Pages['/stock-in-records'] = {
       (order.items || []).forEach(item => {
         const product = Store.products.getById(item.productId);
         const category = product ? Store.categories.getById(product.categoryId) : null;
+        let specName = '';
+        if (product && product.specs) {
+          const spec = product.specs.find(sp => sp.id === item.specId);
+          if (spec) specName = spec.name;
+        }
         rows.push([
           order.date,
           wh ? wh.name : '',
@@ -164,6 +190,7 @@ window.Pages['/stock-in-records'] = {
           order.type,
           product ? product.name : '',
           category ? category.name : '',
+          specName,
           product ? (product.unit || '') : '',
           item.quantity,
           item.price,
@@ -176,7 +203,7 @@ window.Pages['/stock-in-records'] = {
 
     UI.exportCSV(
       `入库记录_${UI.today()}.csv`,
-      ['日期', '仓库', '往来单位', '类型', '商品名称', '分类', '单位', '数量', '单价', '金额', '操作人', '创建时间'],
+      ['日期', '仓库', '往来单位', '类型', '商品名称', '分类', '规格', '单位', '数量', '单价', '金额', '操作人', '创建时间'],
       rows
     );
   }
